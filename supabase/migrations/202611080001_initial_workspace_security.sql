@@ -213,7 +213,7 @@ revoke all on public.workspaces, public.workspace_members, public.social_account
   public.content_posts, public.post_channels, public.approvals, public.audit_logs from anon;
 grant select, update on public.workspaces to authenticated;
 grant select, insert, update, delete on public.workspace_members to authenticated;
-grant select, insert, update, delete on public.social_accounts to authenticated;
+grant select (id, workspace_id, platform, platform_account_id, account_name, status, token_expires_at, connected_by, created_at, updated_at) on public.social_accounts to authenticated;\ngrant insert (workspace_id, platform, platform_account_id, account_name, status, token_expires_at, connected_by) on public.social_accounts to authenticated;\ngrant update (account_name, status, token_expires_at, updated_at) on public.social_accounts to authenticated;\ngrant delete on public.social_accounts to authenticated;
 grant select, insert, update, delete on public.content_posts to authenticated;
 grant select, insert, update, delete on public.post_channels to authenticated;
 grant select, insert, update on public.approvals to authenticated;
