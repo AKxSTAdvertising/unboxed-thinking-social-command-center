@@ -59,13 +59,15 @@ export async function POST(request: NextRequest) {
     if (userLookupError) return NextResponse.json({ error: userLookupError.message }, { status: 400 });
     const alreadyRegistered = userPage.users.find((u) => u.email?.toLowerCase() === email);
     if (alreadyRegistered) {
-      const { data: existingMember } = await admin.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).eq("user_id", alreadyRegistered.id).maybeSingle();
+      const { data: existingMember, error: memberLookupError } = await ctx.supabase.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).eq("user_id", alreadyRegistered.id).maybeSingle();
+      if (memberLookupError) return NextResponse.json({ error: memberLookupError.message }, { status: 400 });
       if (existingMember) return NextResponse.json({ error: "This person is already a workspace member." }, { status: 409 });
-      const { error: addError } = await admin.from("workspace_members").insert({ workspace_id: ctx.member.workspace_id, user_id: alreadyRegistered.id, role });
+      const { error: addError } = await ctx.supabase.from("workspace_members").insert({ workspace_id: ctx.member.workspace_id, user_id: alreadyRegistered.id, role });
       if (addError) return NextResponse.json({ error: addError.message }, { status: 400 });
       return NextResponse.json({ ok: true, message: "Existing account added to the workspace. Let them know they can sign in to access it." });
     }
-    const { data: existing } = await admin.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).limit(1000);
+    const { data: existing, error: existingError } = await ctx.supabase.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).limit(1000);
+    if (existingError) return NextResponse.json({ error: existingError.message }, { status: 400 });
     if (existing?.length) {
       for (const item of existing) {
         const { data } = await admin.auth.admin.getUserById(item.user_id);
@@ -110,9 +112,10 @@ export async function PATCH(request: NextRequest) {
       const userId = String(body.user_id || "");
       if (!["manager", "creator", "reviewer", "client"].includes(role)) return NextResponse.json({ error: "Invalid role." }, { status: 400 });
       const admin = adminClient();
-      const { data: target } = await admin.from("workspace_members").select("role").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).single();
+      const { data: target, error: targetError } = await ctx.supabase.from("workspace_members").select("role").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).single();
+      if (targetError) return NextResponse.json({ error: targetError.message }, { status: 400 });
       if (!target || target.role === "owner" || (target.role === "admin" && ctx.member.role !== "owner")) return NextResponse.json({ error: "You cannot change this member's role." }, { status: 403 });
-      const { error } = await admin.from("workspace_members").update({ role }).eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId);
+      const { error } = await ctx.supabase.from("workspace_members").update({ role }).eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId);
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       return NextResponse.json({ ok: true });
     }
@@ -121,7 +124,7 @@ export async function PATCH(request: NextRequest) {
       const admin = adminClient();
       const { data: target } = await admin.from("workspace_members").select("role").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).single();
       if (!target || target.role === "owner" || (target.role === "admin" && ctx.member.role !== "owner") || userId === ctx.user.id) return NextResponse.json({ error: "You cannot remove this member." }, { status: 403 });
-      const { error } = await admin.from("workspace_members").delete().eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId);
+      const { error } = await ctx.supabase.from("workspace_members").delete().eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId);
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       return NextResponse.json({ ok: true });
     }
