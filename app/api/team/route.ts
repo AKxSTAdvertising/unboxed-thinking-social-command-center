@@ -63,7 +63,12 @@ export async function GET() {
     const { data: invitations, error: inviteError } = await ctx.supabase.from("workspace_invitations")
       .select("id,email,role,status,expires_at,created_at").eq("workspace_id", ctx.member.workspace_id).order("created_at", { ascending: false });
     if (inviteError) return NextResponse.json({ error: inviteError.message }, { status: 400 });
-    return NextResponse.json({ members: userResults, invitations: invitations || [], workspace_id: ctx.member.workspace_id, current_role: ctx.member.role });
+    const isPrimaryOwner = ctx.user.email?.toLowerCase() === "itsshailesh0414@gmail.com";
+    const { data: accessRequests, error: requestError } = isPrimaryOwner
+      ? await admin.from("workspace_access_requests").select("id,user_id,email,full_name,status,requested_at,workspace_id").eq("workspace_id", ctx.member.workspace_id).eq("status", "pending").order("requested_at", { ascending: false })
+      : { data: [], error: null };
+    if (requestError) return NextResponse.json({ error: requestError.message }, { status: 400 });
+    return NextResponse.json({ members: userResults, invitations: invitations || [], access_requests: accessRequests || [], workspace_id: ctx.member.workspace_id, current_role: ctx.member.role });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Could not load team." }, { status: 500 });
   }
@@ -149,15 +154,49 @@ export async function PATCH(request: NextRequest) {
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       return NextResponse.json({ ok: true });
     }
+    if (action === "approve_signup" || action === "reject_signup") {
+      if (ctx.user.email?.toLowerCase() !== "itsshailesh0414@gmail.com") return NextResponse.json({ error: "Only the primary owner can approve signups." }, { status: 403 });
+      const requestId = String(body.request_id || "");
+      const admin = adminClient();
+      const { data: accessRequest, error: requestError } = await admin.from("workspace_access_requests")
+        .select("id,user_id,email,workspace_id,status").eq("id", requestId).eq("workspace_id", ctx.member.workspace_id).single();
+      if (requestError || !accessRequest) return NextResponse.json({ error: requestError?.message || "Signup request not found." }, { status: 404 });
+      if (accessRequest.status !== "pending") return NextResponse.json({ error: "This signup request has already been reviewed." }, { status: 409 });
+      if (action === "approve_signup") {
+        const { error: memberError } = await admin.from("workspace_members").insert({
+          workspace_id: accessRequest.workspace_id, user_id: accessRequest.user_id, role: "manager"
+        });
+        if (memberError && !memberError.message.toLowerCase().includes("duplicate")) return NextResponse.json({ error: memberError.message }, { status: 400 });
+        const { error: updateError } = await admin.from("workspace_access_requests").update({
+          status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: ctx.user.id
+        }).eq("id", requestId).eq("status", "pending");
+        if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
+        await admin.from("workspace_notifications").insert({
+          workspace_id: accessRequest.workspace_id, user_id: accessRequest.user_id,
+          title: "Workspace access approved", body: "Your request was approved. You can now sign in to the company workspace.", kind: "signup_approved"
+        });
+        return NextResponse.json({ ok: true, message: "Signup approved. Manager access is now active." });
+      }
+      const { error: updateError } = await admin.from("workspace_access_requests").update({
+        status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: ctx.user.id
+      }).eq("id", requestId).eq("status", "pending");
+      if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
+      await admin.auth.admin.deleteUser(accessRequest.user_id);
+      return NextResponse.json({ ok: true, message: "Signup rejected and the unapproved account deleted." });
+    }
     if (action === "remove") {
       const userId = String(body.user_id || "");
-      if (ctx.member.role !== "owner" || ctx.user.email?.toLowerCase() !== "itsshailesh0414@gmail.com") return NextResponse.json({ error: "Only the primary owner can remove workspace members." }, { status: 403 });
-      const { data: target, error: targetError } = await ctx.supabase.from("workspace_members").select("role").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).single();
-      if (targetError) return NextResponse.json({ error: targetError.message }, { status: 400 });
-      if (!target || userId === ctx.user.id) return NextResponse.json({ error: "The primary owner cannot remove their own account." }, { status: 403 });
-      const { error } = await ctx.supabase.from("workspace_members").delete().eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId);
-      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-      return NextResponse.json({ ok: true });
+      if (ctx.user.email?.toLowerCase() !== "itsshailesh0414@gmail.com") return NextResponse.json({ error: "Only the primary owner can permanently remove accounts." }, { status: 403 });
+      if (!userId || userId === ctx.user.id) return NextResponse.json({ error: "The primary owner cannot remove their own account." }, { status: 403 });
+      const admin = adminClient();
+      const { data: targetUser, error: targetError } = await admin.auth.admin.getUserById(userId);
+      if (targetError || !targetUser.user) return NextResponse.json({ error: targetError?.message || "User not found." }, { status: 404 });
+      if (targetUser.user.email?.toLowerCase() === "itsshailesh0414@gmail.com") return NextResponse.json({ error: "The primary owner is protected." }, { status: 403 });
+      const { data: membership } = await admin.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).maybeSingle();
+      if (!membership) return NextResponse.json({ error: "This user is not a member of the company workspace." }, { status: 404 });
+      const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
+      if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 400 });
+      return NextResponse.json({ ok: true, message: "User permanently deleted from Supabase Auth and related database records." });
     }
     return NextResponse.json({ error: "Unknown team action." }, { status: 400 });
   } catch (e) {
