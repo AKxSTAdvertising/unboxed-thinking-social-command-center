@@ -55,5 +55,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.json({ error: status === "pending" ? "Your signup is awaiting Primary Owner approval." : "Workspace access is not approved." }, { status: 403 });
   }
   if (status === "pending") return NextResponse.redirect(new URL("/pending-approval", request.url));
-  return NextResponse.redirect(new URL("/login?error=not-approved", request.url));
+  // Do not bounce an authenticated user between /dashboard and /login when no membership exists.
+  // The pending page is public to authenticated and unauthenticated users, so this is a terminal route.
+  return NextResponse.redirect(new URL("/pending-approval?status=not-approved", request.url));
 }
