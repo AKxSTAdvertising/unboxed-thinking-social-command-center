@@ -42,7 +42,7 @@ export default function AuthForm() {
     <section className="auth-showcase">
       <div className="auth-showcase-top"><span className="auth-live-dot" /> SOCIAL COMMAND CENTER <span className="auth-top-line" /> WORKSPACE ACCESS</div>
       <div className="auth-orbit auth-orbit-one" /><div className="auth-orbit auth-orbit-two" />
-      <div className="auth-logo-wrap"><div className="auth-logo-glow" /><img className="auth-logo-image" src="/unboxed-thinking-logo.svg" alt="Unboxed Thinking" /></div>
+      <div className="auth-logo-wrap"><div className="auth-logo-glow" /><img className="auth-logo-image" src="/unboxed-thinking-logo.jpeg" alt="Unboxed Thinking" /></div>
       <div className="auth-showcase-copy">
         <div className="auth-overline"><Sparkles size={13} /> ONE WORKSPACE. EVERY CLIENT.</div>
         <h2>Make every<br/><span>connection count.</span></h2>
@@ -53,7 +53,7 @@ export default function AuthForm() {
     </section>
     <section className="auth-panel">
       <div className="auth-panel-inner">
-        <div className="auth-mobile-brand"><img src="/unboxed-thinking-logo.svg" alt="Unboxed Thinking"/></div>
+        <div className="auth-mobile-brand"><img src="/unboxed-thinking-logo.jpeg" alt="Unboxed Thinking"/></div>
         <div className="auth-welcome-label"><span /> AUTHORIZED TEAM ACCESS</div>
         <h1>Welcome back.</h1>
         <p className="auth-intro">Sign in with the account provided by your workspace owner to continue.</p>
