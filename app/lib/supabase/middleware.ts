@@ -31,6 +31,9 @@ export async function updateSession(request: NextRequest) {
   const publicPaths = ["/login", "/pending-approval", "/auth/callback"];
   if (!user || publicPaths.some((path) => pathname === path || pathname.startsWith(path + "/"))) return response;
 
+  // The permanent Primary Owner must never be blocked by signup approval or membership lookup.
+  if (user.email?.toLowerCase() === "itsshailesh0414@gmail.com") return response;
+
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Server access verification is not configured." }, { status: 503 });
