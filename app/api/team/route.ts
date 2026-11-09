@@ -15,8 +15,34 @@ async function context() {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return { response: NextResponse.json({ error: "Authentication required." }, { status: 401 }) };
-  const { data: member } = await supabase.from("workspace_members")
-    .select("workspace_id,role,workspaces(name)").eq("user_id", user.id).limit(1).single();
+
+  // Prefer the primary owner's company workspace when this account is a member of it.
+  // This prevents an older standalone signup workspace from hiding the company team.
+  const admin = adminClient();
+  const { data: usersPage } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const primaryUser = usersPage?.users.find((item) => item.email?.toLowerCase() === "itsshailesh0414@gmail.com");
+  let member: any = null;
+
+  if (primaryUser) {
+    const { data: primaryMembership } = await admin.from("workspace_members")
+      .select("workspace_id").eq("user_id", primaryUser.id).eq("role", "owner").limit(1).maybeSingle();
+
+    if (primaryMembership) {
+      const { data: companyMembership } = await admin.from("workspace_members")
+        .select("workspace_id,role,workspaces(name)")
+        .eq("workspace_id", primaryMembership.workspace_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (companyMembership) member = companyMembership;
+    }
+  }
+
+  if (!member) {
+    const { data: ownMembership } = await supabase.from("workspace_members")
+      .select("workspace_id,role,workspaces(name)").eq("user_id", user.id).limit(1).maybeSingle();
+    member = ownMembership;
+  }
+
   if (!member) return { response: NextResponse.json({ error: "Workspace membership not found." }, { status: 403 }) };
   if (!["owner", "admin"].includes(member.role)) return { response: NextResponse.json({ error: "Only workspace owners and admins can manage team access." }, { status: 403 }) };
   return { supabase, user, member };
