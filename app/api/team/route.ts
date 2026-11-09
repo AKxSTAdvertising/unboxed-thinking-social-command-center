@@ -65,7 +65,7 @@ export async function GET() {
     if (inviteError) return NextResponse.json({ error: inviteError.message }, { status: 400 });
     const isPrimaryOwner = ctx.user.email?.toLowerCase() === "itsshailesh0414@gmail.com";
     const { data: accessRequests, error: requestError } = isPrimaryOwner
-      ? await admin.from("workspace_access_requests").select("id,user_id,email,full_name,status,requested_at,workspace_id").eq("workspace_id", ctx.member.workspace_id).eq("status", "pending").order("requested_at", { ascending: false })
+      ? await admin.from("workspace_access_requests").select("id,user_id,email,full_name,requested_role,status,requested_at,workspace_id").eq("workspace_id", ctx.member.workspace_id).eq("status", "pending").order("requested_at", { ascending: false })
       : { data: [], error: null };
     if (requestError) return NextResponse.json({ error: requestError.message }, { status: 400 });
     return NextResponse.json({ members: userResults, invitations: invitations || [], access_requests: accessRequests || [], workspace_id: ctx.member.workspace_id, current_role: ctx.member.role });
@@ -159,18 +159,20 @@ export async function PATCH(request: NextRequest) {
       const requestId = String(body.request_id || "");
       const admin = adminClient();
       const { data: accessRequest, error: requestError } = await admin.from("workspace_access_requests")
-        .select("id,user_id,email,workspace_id,status").eq("id", requestId).eq("workspace_id", ctx.member.workspace_id).single();
+        .select("id,user_id,email,workspace_id,requested_role,status").eq("id", requestId).eq("workspace_id", ctx.member.workspace_id).single();
       if (requestError || !accessRequest) return NextResponse.json({ error: requestError?.message || "Signup request not found." }, { status: 404 });
       if (accessRequest.status !== "pending") return NextResponse.json({ error: "This signup request has already been reviewed." }, { status: 409 });
       if (action === "approve_signup") {
         const { error: memberError } = await admin.from("workspace_members").insert({
-          workspace_id: accessRequest.workspace_id, user_id: accessRequest.user_id, role: "manager"
+          workspace_id: accessRequest.workspace_id, user_id: accessRequest.user_id, role: accessRequest.requested_role || "manager"
         });
         if (memberError && !memberError.message.toLowerCase().includes("duplicate")) return NextResponse.json({ error: memberError.message }, { status: 400 });
         const { error: updateError } = await admin.from("workspace_access_requests").update({
           status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: ctx.user.id
         }).eq("id", requestId).eq("status", "pending");
         if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
+        await admin.from("workspace_invitations").update({ status: "accepted", accepted_at: new Date().toISOString() })
+          .eq("workspace_id", accessRequest.workspace_id).eq("email", accessRequest.email).eq("status", "pending");
         await admin.from("workspace_notifications").insert({
           workspace_id: accessRequest.workspace_id, user_id: accessRequest.user_id,
           title: "Workspace access approved", body: "Your request was approved. You can now sign in to the company workspace.", kind: "signup_approved"
