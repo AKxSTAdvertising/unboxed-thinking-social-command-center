@@ -131,30 +131,54 @@ create policy "Workspace editors delete media objects" on storage.objects for de
  and (owner_id=auth.uid()::text or public.has_workspace_role((split_part(name,'/',1))::uuid,array['owner','admin']))
 );
 
--- When an invited user first signs up, attach them to the inviter's workspace and mark invite accepted.
-create or replace function public.accept_workspace_invites_for_new_user()
-returns trigger language plpgsql security definer set search_path=public,auth
+-- Replace the signup trigger so invited users join the inviter's workspace instead of receiving a second empty workspace.
+drop trigger if exists on_auth_user_created_accept_workspace_invites on auth.users;
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer
+set search_path=public,auth
 as $$
+declare
+  new_workspace_id uuid;
+  workspace_label text;
+  invitation_found boolean := false;
 begin
- if new.email is not null then
-   insert into public.workspace_members(workspace_id,user_id,role)
-   select wi.workspace_id,new.id,wi.role
-   from public.workspace_invitations wi
-   where lower(wi.email)=lower(new.email)
-     and wi.status='pending'
-     and wi.expires_at>now()
-   on conflict (workspace_id,user_id) do nothing;
+  if new.email is not null then
+    select wi.workspace_id into new_workspace_id
+    from public.workspace_invitations wi
+    where lower(wi.email)=lower(new.email)
+      and wi.status='pending'
+      and wi.expires_at>now()
+    order by wi.created_at desc
+    limit 1;
 
-   update public.workspace_invitations
-   set status='accepted',accepted_at=now()
-   where lower(email)=lower(new.email) and status='pending' and expires_at>now();
- end if;
- return new;
+    if new_workspace_id is not null then
+      invitation_found := true;
+      insert into public.workspace_members(workspace_id,user_id,role)
+      select wi.workspace_id,new.id,wi.role
+      from public.workspace_invitations wi
+      where wi.workspace_id=new_workspace_id
+        and lower(wi.email)=lower(new.email)
+        and wi.status='pending'
+        and wi.expires_at>now()
+      on conflict (workspace_id,user_id) do nothing;
+
+      update public.workspace_invitations
+      set status='accepted',accepted_at=now()
+      where workspace_id=new_workspace_id and lower(email)=lower(new.email)
+        and status='pending' and expires_at>now();
+    end if;
+  end if;
+
+  if not invitation_found then
+    workspace_label := coalesce(nullif(trim(new.raw_user_meta_data->>'workspace_name'), ''), 'My Workspace');
+    insert into public.workspaces(name,created_by) values(workspace_label,new.id)
+    returning id into new_workspace_id;
+    insert into public.workspace_members(workspace_id,user_id,role)
+    values(new_workspace_id,new.id,'owner');
+  end if;
+  return new;
 end;
 $$;
-drop trigger if exists on_auth_user_created_accept_workspace_invites on auth.users;
-create trigger on_auth_user_created_accept_workspace_invites after insert on auth.users
-for each row execute procedure public.accept_workspace_invites_for_new_user();
 
 -- Keep role checks strict: client role is read-only and reviewers can review, not create content.
 drop policy if exists "Editors can update posts" on public.content_posts;
