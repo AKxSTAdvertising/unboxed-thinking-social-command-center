@@ -41,8 +41,8 @@ export default function DashboardClient(){
   const options=(members as any[]).map((m:any)=>({id:m.workspace_id,name:m.workspaces?.name||"My Workspace",role:m.role}));setWorkspaceOptions(options);
   const selected=options[0];const selectedMember=members[0] as any;const ws=selectedMember.workspaces;setWorkspaceId(selected.id);setWorkspace(selected.name);setWorkspaceDraft(selected.name);
   const [b,p]=await Promise.all([
-   supabase.from("client_brands").select("*").eq("workspace_id",members.workspace_id).order("created_at",{ascending:false}),
-   supabase.from("content_posts").select("*").eq("workspace_id",members.workspace_id).order("created_at",{ascending:false})
+   supabase.from("client_brands").select("*").eq("workspace_id",selected.id).order("created_at",{ascending:false}),
+   supabase.from("content_posts").select("*").eq("workspace_id",selected.id).order("created_at",{ascending:false})
   ]);
   if(b.error&&!b.error.message.includes("does not exist"))setError(b.error.message);
   if(p.error)setError(p.error.message);
