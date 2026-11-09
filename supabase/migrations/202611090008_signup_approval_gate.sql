@@ -1,4 +1,9 @@
 -- Owner approval gate for every self-signup. Invitations keep their assigned roles.
+-- Owner invitations are permitted only through the Primary Owner's API checks.
+alter table public.workspace_invitations drop constraint if exists workspace_invitations_role_check;
+alter table public.workspace_invitations add constraint workspace_invitations_role_check
+ check (role in ('owner','admin','manager','creator','reviewer','client'));
+
 create table if not exists public.workspace_access_requests (
  id uuid primary key default gen_random_uuid(),
  user_id uuid not null unique references auth.users(id) on delete cascade,
