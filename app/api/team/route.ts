@@ -141,8 +141,7 @@ export async function PATCH(request: NextRequest) {
       const userId = String(body.user_id || "");
       if (!["owner", "admin", "manager", "creator", "reviewer", "client"].includes(role)) return NextResponse.json({ error: "Invalid role." }, { status: 400 });
       const isPrimaryOwner = ctx.user.email?.toLowerCase() === "itsshailesh0414@gmail.com";
-      if (role === "owner" && !isPrimaryOwner) return NextResponse.json({ error: "Only the primary owner can appoint another Owner." }, { status: 403 });
-      if (role === "admin" && ctx.member.role !== "owner") return NextResponse.json({ error: "Only the owner can assign Admin access." }, { status: 403 });
+      if (!isPrimaryOwner) return NextResponse.json({ error: "Only the primary owner can change member roles." }, { status: 403 });
       const { data: target, error: targetError } = await ctx.supabase.from("workspace_members").select("role").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).single();
       if (targetError) return NextResponse.json({ error: targetError.message }, { status: 400 });
       if (!target || (target.role === "owner" && !isPrimaryOwner) || (target.role === "admin" && ctx.member.role !== "owner")) return NextResponse.json({ error: "Only the primary owner can change another Owner. Owners manage Admin roles." }, { status: 403 });
