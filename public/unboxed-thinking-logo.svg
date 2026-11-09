@@ -1,8 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 320" role="img" aria-labelledby="title desc">
-  <title id="title">Unboxed Thinking</title>
-  <desc id="desc">White U and red T lettermark above the Unboxed Thinking wordmark.</desc>
-  <path d="M112 40h48v96c0 29 13 44 38 44s38-15 38-44V40h48v98c0 56-32 87-86 87s-86-31-86-87V40z" fill="#fff"/>
-  <path d="M211 40h115v44h-34v141h-47V84h-34z" fill="#ed252b"/>
-  <text x="200" y="270" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="800" letter-spacing="-1.7" fill="#fff">UNBOXED</text>
-  <text x="200" y="307" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="800" letter-spacing="-1.7" fill="#ed252b">THINKING</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" role="img" aria-labelledby="title desc">
+<title id="title">Unboxed Thinking</title><desc id="desc">The Unboxed Thinking logo: white U, red T, and white and red wordmark on black.</desc>
+<rect width="1254" height="1254" fill="#000"/>
+<rect x="417" y="331" width="412" height="400" rx="78" fill="#030303" stroke="#414141" stroke-width="3"/>
+<path d="M483 444h52v135c0 52 18 76 52 76s52-24 52-76V444h52v137c0 82-36 120-104 120s-104-38-104-120V444z" fill="#fff"/>
+<path d="M584 444h196v43h-65v137h-52V487h-79z" fill="#ed1c24"/>
+<text x="627" y="857" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="112" font-weight="900" letter-spacing="-5" fill="#fff">UNBOXED</text>
+<text x="627" y="857" text-anchor="middle" dx="291" font-family="Arial,Helvetica,sans-serif" font-size="112" font-weight="900" letter-spacing="-5" fill="#ed1c24">THINKING</text>
 </svg>
