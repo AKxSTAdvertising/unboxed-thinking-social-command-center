@@ -25,7 +25,35 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // Refresh and validate the auth session on every matched request.
-  await supabase.auth.getUser();
-  return response;
+  // Refresh the auth session, then enforce server-side workspace approval.
+  const { data: { user } } = await supabase.auth.getUser();
+  const pathname = request.nextUrl.pathname;
+  const publicPaths = ["/login", "/pending-approval", "/auth/callback"];
+  if (!user || publicPaths.some((path) => pathname === path || pathname.startsWith(path + "/"))) return response;
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Server access verification is not configured." }, { status: 503 });
+    return NextResponse.redirect(new URL("/login?error=access-check", request.url));
+  }
+
+  const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` };
+  const membershipUrl = `${url}/rest/v1/workspace_members?user_id=eq.${encodeURIComponent(user.id)}&select=user_id&limit=1`;
+  const membershipResponse = await fetch(membershipUrl, { headers, cache: "no-store" });
+  if (!membershipResponse.ok) {
+    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Could not verify workspace membership." }, { status: 503 });
+    return NextResponse.redirect(new URL("/login?error=access-check", request.url));
+  }
+  const memberships = await membershipResponse.json();
+  if (Array.isArray(memberships) && memberships.length > 0) return response;
+
+  const requestUrl = `${url}/rest/v1/workspace_access_requests?user_id=eq.${encodeURIComponent(user.id)}&select=status&limit=1`;
+  const accessResponse = await fetch(requestUrl, { headers, cache: "no-store" });
+  const accessRows = accessResponse.ok ? await accessResponse.json() : [];
+  const status = Array.isArray(accessRows) && accessRows[0]?.status;
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: status === "pending" ? "Your signup is awaiting Primary Owner approval." : "Workspace access is not approved." }, { status: 403 });
+  }
+  if (status === "pending") return NextResponse.redirect(new URL("/pending-approval", request.url));
+  return NextResponse.redirect(new URL("/login?error=not-approved", request.url));
 }
