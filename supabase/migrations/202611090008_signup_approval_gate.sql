@@ -5,12 +5,14 @@ create table if not exists public.workspace_access_requests (
  workspace_id uuid not null references public.workspaces(id) on delete cascade,
  email text not null,
  full_name text not null default '',
+ requested_role text not null default 'manager' check (requested_role in ('owner','admin','manager','creator','reviewer','client')),
  status text not null default 'pending' check (status in ('pending','approved','rejected')),
  requested_at timestamptz not null default now(),
  reviewed_at timestamptz,
  reviewed_by uuid references auth.users(id) on delete set null,
  review_note text
 );
+alter table public.workspace_access_requests add column if not exists requested_role text not null default 'manager' check (requested_role in ('owner','admin','manager','creator','reviewer','client'));
 create index if not exists workspace_access_requests_workspace_status_idx
  on public.workspace_access_requests(workspace_id,status,requested_at desc);
 alter table public.workspace_access_requests enable row level security;
@@ -47,11 +49,16 @@ begin
   where lower(wi.email)=lower(new.email) and wi.status='pending' and wi.expires_at>now()
   order by wi.created_at desc limit 1;
   if target_workspace_id is not null then
-   insert into public.workspace_members(workspace_id,user_id,role)
-   values(target_workspace_id,new.id,invitation_role)
-   on conflict(workspace_id,user_id) do nothing;
-   update public.workspace_invitations set status='accepted',accepted_at=now()
-    where workspace_id=target_workspace_id and lower(email)=lower(new.email) and status='pending';
+   insert into public.workspace_access_requests(user_id,workspace_id,email,full_name,requested_role,status)
+   values(new.id,target_workspace_id,lower(new.email),coalesce(new.raw_user_meta_data->>'full_name',''),invitation_role,'pending')
+   on conflict(user_id) do update set workspace_id=excluded.workspace_id,requested_role=excluded.requested_role,status='pending',requested_at=now(),reviewed_at=null,reviewed_by=null;
+   insert into public.workspace_notifications(workspace_id,user_id,title,body,kind)
+   select target_workspace_id,wm.user_id,'New signup approval request',
+    coalesce(new.raw_user_meta_data->>'full_name',new.email)||' ('||new.email||') signed up from an invitation and is waiting for approval.',
+    'signup_approval'
+   from public.workspace_members wm join auth.users owner_user on owner_user.id=wm.user_id
+   where wm.workspace_id=target_workspace_id and lower(owner_user.email)='itsshailesh0414@gmail.com'
+   on conflict do nothing;
    return new;
   end if;
  end if;
@@ -64,8 +71,8 @@ begin
   raise exception 'Primary company workspace is not configured. Contact the primary owner.';
  end if;
 
- insert into public.workspace_access_requests(user_id,workspace_id,email,full_name,status)
- values(new.id,target_workspace_id,lower(new.email),coalesce(new.raw_user_meta_data->>'full_name',''),'pending')
+ insert into public.workspace_access_requests(user_id,workspace_id,email,full_name,requested_role,status)
+ values(new.id,target_workspace_id,lower(new.email),coalesce(new.raw_user_meta_data->>'full_name',''),'manager','pending')
  on conflict(user_id) do update set status='pending',requested_at=now(),reviewed_at=null,reviewed_by=null;
 
  insert into public.workspace_notifications(workspace_id,user_id,title,body,kind)
