@@ -122,7 +122,8 @@ export async function PATCH(request: NextRequest) {
     if (action === "remove") {
       const userId = String(body.user_id || "");
       const admin = adminClient();
-      const { data: target } = await admin.from("workspace_members").select("role").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).single();
+      const { data: target, error: targetError } = await ctx.supabase.from("workspace_members").select("role").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).single();
+      if (targetError) return NextResponse.json({ error: targetError.message }, { status: 400 });
       if (!target || target.role === "owner" || (target.role === "admin" && ctx.member.role !== "owner") || userId === ctx.user.id) return NextResponse.json({ error: "You cannot remove this member." }, { status: 403 });
       const { error } = await ctx.supabase.from("workspace_members").delete().eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId);
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
