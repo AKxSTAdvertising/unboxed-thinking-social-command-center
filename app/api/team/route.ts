@@ -50,10 +50,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const email = String(body.email || "").trim().toLowerCase();
     const role = String(body.role || "creator");
-    const allowed = ["admin", "manager", "creator", "reviewer", "client"];
+    const allowed = ["owner", "admin", "manager", "creator", "reviewer", "client"];
+    const isPrimaryOwner = ctx.user.email?.toLowerCase() === "itsshailesh0414@gmail.com";
+    if (role === "owner" && !isPrimaryOwner) return NextResponse.json({ error: "Only the primary owner can appoint another Owner." }, { status: 403 });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
     if (!allowed.includes(role)) return NextResponse.json({ error: "Invalid role." }, { status: 400 });
-    if (role === "admin" && ctx.member.role !== "owner") return NextResponse.json({ error: "Only the owner can assign Admin access." }, { status: 403 });
+    if (role === "admin" && ctx.member.role !== "owner") return NextResponse.json({ error: "Only an Owner can assign Admin access." }, { status: 403 });
     const admin = adminClient();
     const { data: userPage, error: userLookupError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
     if (userLookupError) return NextResponse.json({ error: userLookupError.message }, { status: 400 });
@@ -62,7 +64,7 @@ export async function POST(request: NextRequest) {
       const { data: existingMember, error: memberLookupError } = await ctx.supabase.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).eq("user_id", alreadyRegistered.id).maybeSingle();
       if (memberLookupError) return NextResponse.json({ error: memberLookupError.message }, { status: 400 });
       if (existingMember) return NextResponse.json({ error: "This person is already a workspace member." }, { status: 409 });
-      if (ctx.member.role !== "owner") return NextResponse.json({ error: "This email already has a Supabase account. Only the workspace owner can add an existing account directly. Ask the owner to add this person." }, { status: 403 });
+      if (!isPrimaryOwner) return NextResponse.json({ error: "Only the primary owner can directly add an existing account. Invite new users by email instead." }, { status: 403 });
       const { error: addError } = await ctx.supabase.from("workspace_members").insert({ workspace_id: ctx.member.workspace_id, user_id: alreadyRegistered.id, role });
       if (addError) return NextResponse.json({ error: addError.message }, { status: 400 });
       return NextResponse.json({ ok: true, message: "Existing account added to the workspace. Let them know they can sign in to access it." });
@@ -111,11 +113,13 @@ export async function PATCH(request: NextRequest) {
     if (action === "role") {
       const role = String(body.role || "");
       const userId = String(body.user_id || "");
-      if (!["admin", "manager", "creator", "reviewer", "client"].includes(role)) return NextResponse.json({ error: "Invalid role." }, { status: 400 });
+      if (!["owner", "admin", "manager", "creator", "reviewer", "client"].includes(role)) return NextResponse.json({ error: "Invalid role." }, { status: 400 });
+      const isPrimaryOwner = ctx.user.email?.toLowerCase() === "itsshailesh0414@gmail.com";
+      if (role === "owner" && !isPrimaryOwner) return NextResponse.json({ error: "Only the primary owner can appoint another Owner." }, { status: 403 });
       if (role === "admin" && ctx.member.role !== "owner") return NextResponse.json({ error: "Only the owner can assign Admin access." }, { status: 403 });
       const { data: target, error: targetError } = await ctx.supabase.from("workspace_members").select("role").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).single();
       if (targetError) return NextResponse.json({ error: targetError.message }, { status: 400 });
-      if (!target || target.role === "owner" || (target.role === "admin" && ctx.member.role !== "owner")) return NextResponse.json({ error: "Only the owner can change an Admin, and nobody can change the Owner." }, { status: 403 });
+      if (!target || (target.role === "owner" && !isPrimaryOwner) || (target.role === "admin" && ctx.member.role !== "owner")) return NextResponse.json({ error: "Only the primary owner can change another Owner. Owners manage Admin roles." }, { status: 403 });
       const { error } = await ctx.supabase.from("workspace_members").update({ role }).eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId);
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       return NextResponse.json({ ok: true });
@@ -125,7 +129,7 @@ export async function PATCH(request: NextRequest) {
       if (ctx.member.role !== "owner" || ctx.user.email?.toLowerCase() !== "itsshailesh0414@gmail.com") return NextResponse.json({ error: "Only the primary owner can remove workspace members." }, { status: 403 });
       const { data: target, error: targetError } = await ctx.supabase.from("workspace_members").select("role").eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId).single();
       if (targetError) return NextResponse.json({ error: targetError.message }, { status: 400 });
-      if (!target || target.role === "owner" || userId === ctx.user.id) return NextResponse.json({ error: "The primary owner cannot be removed." }, { status: 403 });
+      if (!target || userId === ctx.user.id) return NextResponse.json({ error: "The primary owner cannot remove their own account." }, { status: 403 });
       const { error } = await ctx.supabase.from("workspace_members").delete().eq("workspace_id", ctx.member.workspace_id).eq("user_id", userId);
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
       return NextResponse.json({ ok: true });
