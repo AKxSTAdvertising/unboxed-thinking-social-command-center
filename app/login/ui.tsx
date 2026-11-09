@@ -36,7 +36,7 @@ export default function AuthForm() {
           setMessage("This email is already registered. If it is not confirmed yet, resend the confirmation email below. If it is already confirmed, sign in instead.");
           setCanResend(true);
         } else {
-          setMessage("Account created. Check your inbox and spam folder for the confirmation email.");
+          setMessage("Account created. Verify your email first. Your company workspace access will remain pending until the Primary Owner approves your request.");
           setCanResend(true);
         }
       } else {
