@@ -55,6 +55,16 @@ export async function POST(request: NextRequest) {
     if (!allowed.includes(role)) return NextResponse.json({ error: "Invalid role." }, { status: 400 });
     if (role === "admin" && ctx.member.role !== "owner") return NextResponse.json({ error: "Only the workspace owner can invite an admin." }, { status: 403 });
     const admin = adminClient();
+    const { data: userPage, error: userLookupError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (userLookupError) return NextResponse.json({ error: userLookupError.message }, { status: 400 });
+    const alreadyRegistered = userPage.users.find((u) => u.email?.toLowerCase() === email);
+    if (alreadyRegistered) {
+      const { data: existingMember } = await admin.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).eq("user_id", alreadyRegistered.id).maybeSingle();
+      if (existingMember) return NextResponse.json({ error: "This person is already a workspace member." }, { status: 409 });
+      const { error: addError } = await admin.from("workspace_members").insert({ workspace_id: ctx.member.workspace_id, user_id: alreadyRegistered.id, role });
+      if (addError) return NextResponse.json({ error: addError.message }, { status: 400 });
+      return NextResponse.json({ ok: true, message: "Existing account added to the workspace. Let them know they can sign in to access it." });
+    }
     const { data: existing } = await admin.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).limit(1000);
     if (existing?.length) {
       for (const item of existing) {
