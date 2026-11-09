@@ -155,3 +155,19 @@ h1{font-size:clamp(34px,3.1vw,44px);line-height:1.08;letter-spacing:-.055em}
 .media-card-actions a{width:30px;height:30px;display:grid;place-items:center;color:#666;border:1px solid #eee;border-radius:8px}
 @media(max-width:1000px){.media-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:680px){.media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Internal collaboration inbox */
+.inbox-module{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(0,1.4fr);gap:18px;align-items:start}
+.inbox-compose label{display:grid;gap:7px;font-size:11px;font-weight:700;color:#444;margin-top:15px}
+.inbox-compose select,.inbox-compose textarea{width:100%;border:1px solid #e3e1df;border-radius:9px;background:#fff;padding:10px 11px;font:500 12px Manrope,sans-serif;color:#242424;resize:vertical}
+.inbox-compose .primary-button{margin-top:13px}
+.discussion-list{display:grid;margin-top:12px}
+.discussion-item{display:grid;grid-template-columns:34px minmax(0,1fr);gap:11px;padding:14px 0;border-top:1px solid #efeeec}
+.discussion-avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#f8e7e5;color:#b3292d;font-size:11px;font-weight:800}
+.discussion-head{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.discussion-head b{font-size:11px}
+.discussion-head span{font-size:9px;color:#999}
+.discussion-item small{display:block;color:#a12c2d;font-size:10px;margin-top:5px}
+.discussion-item p{font-size:12px;line-height:1.6;color:#444;margin:7px 0 0;white-space:pre-wrap}
+@media(max-width:850px){.inbox-module{grid-template-columns:1fr}}
