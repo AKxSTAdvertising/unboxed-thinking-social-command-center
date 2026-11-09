@@ -80,51 +80,39 @@ export async function POST(request: NextRequest) {
     if ("response" in ctx) return ctx.response;
     const body = await request.json();
     const email = String(body.email || "").trim().toLowerCase();
-    const role = String(body.role || "creator");
+    const role = String(body.role || "manager");
     const allowed = ["owner", "admin", "manager", "creator", "reviewer", "client"];
     const isPrimaryOwner = ctx.user.email?.toLowerCase() === "itsshailesh0414@gmail.com";
-    if (role === "owner" && !isPrimaryOwner) return NextResponse.json({ error: "Only the primary owner can appoint another Owner." }, { status: 403 });
+    if (!isPrimaryOwner) return NextResponse.json({ error: "Only the Primary Owner can create accounts directly." }, { status: 403 });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
     if (!allowed.includes(role)) return NextResponse.json({ error: "Invalid role." }, { status: 400 });
-    if (role === "admin" && ctx.member.role !== "owner") return NextResponse.json({ error: "Only an Owner can assign Admin access." }, { status: 403 });
+    const password = String(body.password || "");
+    const fullName = String(body.full_name || "").trim();
+    if (password.length < 8) return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+    if (!fullName) return NextResponse.json({ error: "Enter the user's full name." }, { status: 400 });
+    if (role === "owner" && !isPrimaryOwner) return NextResponse.json({ error: "Only the Primary Owner can appoint another Owner." }, { status: 403 });
+
     const admin = adminClient();
-    const { data: userPage, error: userLookupError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    if (userLookupError) return NextResponse.json({ error: userLookupError.message }, { status: 400 });
-    const alreadyRegistered = userPage.users.find((u) => u.email?.toLowerCase() === email);
-    if (alreadyRegistered) {
-      const { data: existingMember, error: memberLookupError } = await ctx.supabase.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).eq("user_id", alreadyRegistered.id).maybeSingle();
-      if (memberLookupError) return NextResponse.json({ error: memberLookupError.message }, { status: 400 });
-      if (existingMember) return NextResponse.json({ error: "This person is already a workspace member." }, { status: 409 });
-      if (!isPrimaryOwner) return NextResponse.json({ error: "Only the primary owner can directly add an existing account. Invite new users by email instead." }, { status: 403 });
-      const { error: addError } = await ctx.supabase.from("workspace_members").insert({ workspace_id: ctx.member.workspace_id, user_id: alreadyRegistered.id, role });
-      if (addError) return NextResponse.json({ error: addError.message }, { status: 400 });
-      return NextResponse.json({ ok: true, message: "Existing account added to the workspace. Let them know they can sign in to access it." });
-    }
-    const { data: existing, error: existingError } = await ctx.supabase.from("workspace_members").select("user_id").eq("workspace_id", ctx.member.workspace_id).limit(1000);
-    if (existingError) return NextResponse.json({ error: existingError.message }, { status: 400 });
-    if (existing?.length) {
-      for (const item of existing) {
-        const { data } = await admin.auth.admin.getUserById(item.user_id);
-        if (data.user?.email?.toLowerCase() === email) return NextResponse.json({ error: "This person is already a workspace member." }, { status: 409 });
-      }
-    }
-    const { error: insertError } = await admin.from("workspace_invitations").upsert({
-      workspace_id: ctx.member.workspace_id, email, role, invited_by: ctx.user.id,
-      status: "pending", expires_at: new Date(Date.now() + 7 * 86400000).toISOString()
-    }, { onConflict: "workspace_id,email" });
-    if (insertError) return NextResponse.json({ error: insertError.message }, { status: 400 });
-    const origin = (process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\/$/, "");
-    const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${origin}/auth/callback?next=/dashboard`,
-      data: { invited_workspace_id: ctx.member.workspace_id, invited_role: role }
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+      email, password, email_confirm: true, user_metadata: { full_name: fullName, created_by_owner: true }
     });
-    if (inviteError) {
-      await admin.from("workspace_invitations").update({ status: "revoked" }).eq("workspace_id", ctx.member.workspace_id).eq("email", email);
-      return NextResponse.json({ error: inviteError.message }, { status: 400 });
+    if (createError || !created.user) return NextResponse.json({ error: createError?.message || "Could not create account." }, { status: 400 });
+
+    const { error: memberError } = await admin.from("workspace_members").insert({
+      workspace_id: ctx.member.workspace_id, user_id: created.user.id, role
+    });
+    if (memberError) {
+      await admin.auth.admin.deleteUser(created.user.id);
+      return NextResponse.json({ error: "Account creation was rolled back because workspace access could not be assigned: " + memberError.message }, { status: 400 });
     }
-    return NextResponse.json({ ok: true, message: "Invitation email sent. Membership activates when the invited person accepts and signs in." });
+    await admin.from("workspace_access_requests").update({
+      status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: ctx.user.id
+    }).eq("user_id", created.user.id).eq("status", "pending");
+    await admin.from("workspace_invitations").update({ status: "accepted", accepted_at: new Date().toISOString() })
+      .eq("workspace_id", ctx.member.workspace_id).eq("email", email);
+    return NextResponse.json({ ok: true, user_id: created.user.id, email, role, message: "User account created and added to the company workspace." });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Could not send invitation." }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Could not create user account." }, { status: 500 });
   }
 }
 
