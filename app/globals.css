@@ -44,7 +44,7 @@
 /* Sidebar refinement: official wordmark, fixed account footer and visible sign out */
 .sidebar{box-sizing:border-box;height:100vh;height:100dvh;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;scrollbar-width:thin;scrollbar-color:#444 transparent}
 .brand{display:flex;align-items:center;justify-content:flex-start;width:100%;min-height:66px;padding:0 5px 22px;margin:0;text-decoration:none;flex:none}
-.brand img{display:block;width:100%;max-width:218px;height:auto;max-height:56px;object-fit:contain;object-position:left center}
+.brand img{display:block;width:100%;max-width:218px;height:auto;max-height:none;object-fit:contain;object-position:center center}
 .workspace-block{flex:none}
 .nav-list{flex:none}
 .nav-spacer{flex:1 0 20px;min-height:20px;height:auto}
