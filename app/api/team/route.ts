@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       status: "pending", expires_at: new Date(Date.now() + 7 * 86400000).toISOString()
     }, { onConflict: "workspace_id,email" });
     if (insertError) return NextResponse.json({ error: insertError.message }, { status: 400 });
-    const origin = (process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\\/$/, "");
+    const origin = (process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\/$/, "");
     const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${origin}/auth/callback?next=/dashboard`,
       data: { invited_workspace_id: ctx.member.workspace_id, invited_role: role }
