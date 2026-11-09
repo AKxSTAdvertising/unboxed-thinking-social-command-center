@@ -16,9 +16,7 @@ create index if not exists workspace_access_requests_workspace_status_idx
 alter table public.workspace_access_requests enable row level security;
 drop policy if exists "Primary owner reads access requests" on public.workspace_access_requests;
 create policy "Primary owner reads access requests" on public.workspace_access_requests
- for select to authenticated using (
-  exists(select 1 from auth.users u where u.id=auth.uid() and lower(u.email)='itsshailesh0414@gmail.com')
- );
+ for select to authenticated using (lower(coalesce(auth.jwt()->>'email',''))='itsshailesh0414@gmail.com');
 revoke all on public.workspace_access_requests from anon, authenticated;
 grant select on public.workspace_access_requests to authenticated;
 
@@ -102,7 +100,7 @@ begin
   if coalesce(target_is_primary,false) then
    raise exception 'The primary owner account cannot be removed.';
   end if;
-  if auth.role() is distinct from 'service_role' and coalesce(actor_is_primary,false) is not true then
+  if auth.uid() is not null and coalesce(actor_is_primary,false) is not true then
    raise exception 'Only the primary owner can remove workspace members.';
   end if;
   return old;
@@ -141,4 +139,5 @@ end;
 $$;
 
 grant select on public.workspace_access_requests to authenticated;
+grant all on public.workspace_access_requests to service_role;
 revoke all on public.workspace_access_requests from anon;
