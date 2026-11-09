@@ -15,14 +15,15 @@ declare
   member_email text;
   primary_actor boolean := false;
   primary_invitation boolean := false;
+  target_is_primary boolean := false;
 begin
   if tg_op = 'DELETE' then
     select lower(email) = 'itsshailesh0414@gmail.com'
       into primary_actor from auth.users where id = auth.uid();
     select lower(email) = 'itsshailesh0414@gmail.com'
-      into member_email from auth.users where id = old.user_id;
+      into target_is_primary from auth.users where id = old.user_id;
 
-    if member_email is true then
+    if coalesce(target_is_primary, false) then
       raise exception 'The primary owner account cannot be removed.';
     end if;
     if old.role = 'owner' and coalesce(primary_actor, false) is not true then
@@ -59,9 +60,9 @@ begin
   end if;
 
   if tg_op = 'UPDATE' and old.role = 'owner' then
-    select lower(email) into member_email
-      from auth.users where id = old.user_id;
-    if member_email = 'itsshailesh0414@gmail.com' then
+    select lower(email) = 'itsshailesh0414@gmail.com'
+      into target_is_primary from auth.users where id = old.user_id;
+    if coalesce(target_is_primary, false) then
       if new.role <> 'owner' or new.user_id <> old.user_id
          or new.workspace_id <> old.workspace_id then
         raise exception 'The primary owner cannot be changed or demoted.';
