@@ -3,6 +3,14 @@
 -- Admins may manage invitations and non-admin roles, but only the owner may
 -- change membership rows or remove members. RLS stays enabled.
 
+-- Normalize any legacy owner rows that do not belong to the primary owner account.
+update public.workspace_members wm
+set role = 'admin'
+from auth.users u
+where u.id = wm.user_id
+  and wm.role = 'owner'
+  and lower(coalesce(u.email, '')) <> 'itsshailesh0414@gmail.com';
+
 create unique index if not exists workspace_members_one_owner_per_workspace
   on public.workspace_members(workspace_id)
   where role = 'owner';
